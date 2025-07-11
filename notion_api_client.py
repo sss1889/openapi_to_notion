@@ -48,8 +48,6 @@ class NotionAPIClient:
         
         # エンドポイント名（H2見出し）
         endpoint_title = f"{endpoint['method']} {endpoint['path']}"
-        if endpoint['summary']:
-            endpoint_title += f" - {endpoint['summary']}"
         
         blocks.append({
             "type": "heading_2",
@@ -60,6 +58,18 @@ class NotionAPIClient:
                 }]
             }
         })
+        
+        # サマリー（通常のテキスト）
+        if endpoint['summary']:
+            blocks.append({
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [{
+                        "type": "text",
+                        "text": {"content": endpoint['summary']}
+                    }]
+                }
+            })
         
         # 説明
         if endpoint['description']:
@@ -148,17 +158,6 @@ class NotionAPIClient:
             
             for media_type, content in endpoint['request_body']['content'].items():
                 if content.get('schema'):
-                    blocks.append({
-                        "type": "paragraph",
-                        "paragraph": {
-                            "rich_text": [{
-                                "type": "text",
-                                "text": {"content": f"Content-Type: {media_type}"},
-                                "annotations": {"bold": True}
-                            }]
-                        }
-                    })
-                    
                     schema_text = self._simplify_schema(content['schema'])
                     # Notion has a 2000 character limit for code blocks
                     if len(schema_text) > 2000:
@@ -226,17 +225,6 @@ class NotionAPIClient:
                 
                 for media_type, content in response.get('content', {}).items():
                     if content.get('schema'):
-                        blocks.append({
-                            "type": "paragraph",
-                            "paragraph": {
-                                "rich_text": [{
-                                    "type": "text",
-                                    "text": {"content": f"Content-Type: {media_type}"},
-                                    "annotations": {"italic": True}
-                                }]
-                            }
-                        })
-                        
                         schema_text = self._simplify_schema(content['schema'])
                         # Notion has a 2000 character limit for code blocks
                         if len(schema_text) > 2000:
