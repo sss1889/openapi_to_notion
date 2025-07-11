@@ -12,7 +12,7 @@ OpenAPI の YAML ファイルを読み込んで、Notion ページに見やす�
   - リクエストボディ（シンプルな JSON 形式）
   - レスポンス（成功レスポンスのみ、シンプルな JSON 形式）
 - 大量のエンドポイントに対応（プログレスバー表示、バッチ処理）
-- Pydantic風のシンプルなスキーマ表示（Optional表記付き）
+- Pydantic 風のシンプルなスキーマ表示（Optional 表記付き）
 
 ## セットアップ
 
@@ -67,6 +67,7 @@ python main.py --openapi path/to/openapi.yaml --notion-page-id YOUR_PAGE_ID
 - `--notion-token`: Notion インテグレーショントークン（環境変数で設定している場合は不要）
 - `--include-errors`: エラーレスポンス（4xx、5xx）をドキュメントに含める（デフォルト：含めない）
 - `--batch-size`: 一度に処理するエンドポイント数（デフォルト：5）
+- `--toggle-mode`: 各エンドポイントをトグルブロック内に作成（デフォルト：無効）
 
 ### Notion ページ ID の取得方法
 
@@ -75,7 +76,8 @@ python main.py --openapi path/to/openapi.yaml --notion-page-id YOUR_PAGE_ID
    ```
    https://www.notion.so/Page-Title-{ページID}
    ```
-   ハイフンで区切られた最後の部分がページ ID です
+   ハイフンで区切られた最後の部分がページ ID です.
+   Page や Title がない場合もあります。
 
 ## 出力例
 

@@ -15,7 +15,7 @@ class NotionAPIClient:
             raise ValueError("Notion token is required. Set NOTION_TOKEN environment variable or pass token parameter.")
         self.client = Client(auth=self.token)
     
-    def create_endpoint_documentation(self, page_id: str, endpoints: List[Dict[str, Any]], include_errors: bool = False, batch_size: int = 5, verify_page: bool = False) -> None:
+    def create_endpoint_documentation(self, page_id: str, endpoints: List[Dict[str, Any]], include_errors: bool = False, batch_size: int = 5, verify_page: bool = False, toggle_mode: bool = False) -> None:
         # Normalize page ID format (add hyphens if needed)
         page_id = self._normalize_page_id(page_id)
         
@@ -35,8 +35,14 @@ class NotionAPIClient:
         
         with tqdm(total=len(endpoints), desc="Processing endpoints") as pbar:
             for endpoint in endpoints:
-                blocks = self._create_endpoint_blocks(endpoint, include_errors)
-                total_blocks.extend(blocks)
+                if toggle_mode:
+                    # トグルモードの場合は各エンドポイントをトグルブロックで囲む
+                    toggle_blocks = self._create_toggle_endpoint(endpoint, include_errors)
+                    total_blocks.extend(toggle_blocks)
+                else:
+                    # 通常モード
+                    blocks = self._create_endpoint_blocks(endpoint, include_errors)
+                    total_blocks.extend(blocks)
                 pbar.update(1)
         
         # Append blocks in batches to avoid hitting API limits
@@ -256,6 +262,222 @@ class NotionAPIClient:
         blocks.append({"type": "divider", "divider": {}})
         
         return blocks
+    
+    def _create_toggle_endpoint(self, endpoint: Dict[str, Any], include_errors: bool = False) -> List[Dict[str, Any]]:
+        # トグルのタイトル（サマリーは含めない）
+        toggle_title = f"{endpoint['method']} {endpoint['path']}"
+        
+        # トグル内のコンテンツブロックを作成
+        content_blocks = []
+        
+        # サマリー（トグル内に表示）
+        if endpoint['summary']:
+            content_blocks.append({
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [{
+                        "type": "text",
+                        "text": {"content": endpoint['summary']}
+                    }]
+                }
+            })
+        
+        # 説明
+        if endpoint['description']:
+            content_blocks.append({
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [{
+                        "type": "text",
+                        "text": {"content": endpoint['description']}
+                    }]
+                }
+            })
+        
+        # タグ
+        if endpoint['tags']:
+            content_blocks.append({
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [{
+                        "type": "text",
+                        "text": {"content": f"Tags: {', '.join(endpoint['tags'])}"},
+                        "annotations": {"italic": True}
+                    }]
+                }
+            })
+        
+        # パラメータ
+        if endpoint['parameters']:
+            content_blocks.append({
+                "type": "heading_3",
+                "heading_3": {
+                    "rich_text": [{
+                        "type": "text",
+                        "text": {"content": "Parameters"}
+                    }]
+                }
+            })
+            
+            param_text = self._format_parameters(endpoint['parameters'])
+            if len(param_text) > 2000:
+                content_blocks.append({
+                    "type": "paragraph",
+                    "paragraph": {
+                        "rich_text": [{
+                            "type": "text",
+                            "text": {"content": "Parameters (truncated due to size):"},
+                            "annotations": {"italic": True}
+                        }]
+                    }
+                })
+                self._add_large_code_block(content_blocks, param_text, "json")
+            else:
+                content_blocks.append({
+                    "type": "code",
+                    "code": {
+                        "rich_text": [{
+                            "type": "text",
+                            "text": {"content": param_text}
+                        }],
+                        "language": "json"
+                    }
+                })
+        
+        # リクエストボディ
+        if endpoint['request_body'] and endpoint['request_body'].get('content'):
+            content_blocks.append({
+                "type": "heading_3",
+                "heading_3": {
+                    "rich_text": [{
+                        "type": "text",
+                        "text": {"content": "Request Body"}
+                    }]
+                }
+            })
+            
+            if endpoint['request_body'].get('description'):
+                content_blocks.append({
+                    "type": "paragraph",
+                    "paragraph": {
+                        "rich_text": [{
+                            "type": "text",
+                            "text": {"content": endpoint['request_body']['description']}
+                        }]
+                    }
+                })
+            
+            for media_type, content in endpoint['request_body']['content'].items():
+                if content.get('schema'):
+                    schema_text = self._simplify_schema(content['schema'])
+                    # Notion has a 2000 character limit for code blocks
+                    if len(schema_text) > 2000:
+                        content_blocks.append({
+                            "type": "paragraph",
+                            "paragraph": {
+                                "rich_text": [{
+                                    "type": "text",
+                                    "text": {"content": "Schema (truncated due to size):"},
+                                    "annotations": {"italic": True}
+                                }]
+                            }
+                        })
+                        # Split large schema into multiple blocks
+                        self._add_large_code_block(content_blocks, schema_text, "json")
+                    else:
+                        content_blocks.append({
+                            "type": "code",
+                            "code": {
+                                "rich_text": [{
+                                    "type": "text",
+                                    "text": {"content": schema_text}
+                                }],
+                                "language": "json"
+                            }
+                        })
+        
+        # レスポンス
+        if endpoint['responses']:
+            content_blocks.append({
+                "type": "heading_3",
+                "heading_3": {
+                    "rich_text": [{
+                        "type": "text",
+                        "text": {"content": "Responses"}
+                    }]
+                }
+            })
+            
+            for status_code, response in endpoint['responses'].items():
+                # Skip error responses if not requested
+                if not include_errors and status_code.startswith(('4', '5')):
+                    continue
+                
+                content_blocks.append({
+                    "type": "paragraph",
+                    "paragraph": {
+                        "rich_text": [{
+                            "type": "text",
+                            "text": {"content": f"Status Code: {status_code}"},
+                            "annotations": {"bold": True}
+                        }]
+                    }
+                })
+                
+                if response.get('description'):
+                    content_blocks.append({
+                        "type": "paragraph",
+                        "paragraph": {
+                            "rich_text": [{
+                                "type": "text",
+                                "text": {"content": response['description']}
+                            }]
+                        }
+                    })
+                
+                for media_type, content in response.get('content', {}).items():
+                    if content.get('schema'):
+                        schema_text = self._simplify_schema(content['schema'])
+                        # Notion has a 2000 character limit for code blocks
+                        if len(schema_text) > 2000:
+                            content_blocks.append({
+                                "type": "paragraph",
+                                "paragraph": {
+                                    "rich_text": [{
+                                        "type": "text",
+                                        "text": {"content": "Schema (truncated due to size):"},
+                                        "annotations": {"italic": True}
+                                    }]
+                                }
+                            })
+                            # Split large schema into multiple blocks
+                            self._add_large_code_block(content_blocks, schema_text, "json")
+                        else:
+                            content_blocks.append({
+                                "type": "code",
+                                "code": {
+                                    "rich_text": [{
+                                        "type": "text",
+                                        "text": {"content": schema_text}
+                                    }],
+                                    "language": "json"
+                                }
+                            })
+        
+        # トグルブロックを作成
+        toggle_block = {
+            "type": "toggle",
+            "toggle": {
+                "rich_text": [{
+                    "type": "text",
+                    "text": {"content": toggle_title}
+                }],
+                "children": content_blocks
+            }
+        }
+        
+        # 区切り線を追加
+        return [toggle_block, {"type": "divider", "divider": {}}]
     
     def _format_parameters(self, parameters: List[Dict[str, Any]]) -> str:
         import json

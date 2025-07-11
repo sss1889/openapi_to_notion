@@ -45,6 +45,11 @@ def main():
         default=5,
         help='Number of endpoints to process in each batch (default: 5)'
     )
+    parser.add_argument(
+        '--toggle-mode',
+        action='store_true',
+        help='Create endpoints inside toggle blocks for better organization'
+    )
     
     args = parser.parse_args()
     
@@ -62,7 +67,8 @@ def main():
             args.notion_page_id, 
             endpoints,
             include_errors=args.include_errors,
-            batch_size=args.batch_size
+            batch_size=args.batch_size,
+            toggle_mode=args.toggle_mode
         )
         
         logger.info("Documentation created successfully!")
