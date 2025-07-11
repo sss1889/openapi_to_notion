@@ -2,7 +2,7 @@
 import argparse
 import sys
 from openapi_parser import OpenAPIParser
-from notion_client import NotionAPIClient
+from notion_api_client import NotionAPIClient
 import logging
 
 
@@ -34,6 +34,17 @@ def main():
         '--notion-token',
         help='Notion integration token (can also be set via NOTION_TOKEN env variable)'
     )
+    parser.add_argument(
+        '--include-errors',
+        action='store_true',
+        help='Include error responses (4xx, 5xx) in the documentation'
+    )
+    parser.add_argument(
+        '--batch-size',
+        type=int,
+        default=5,
+        help='Number of endpoints to process in each batch (default: 5)'
+    )
     
     args = parser.parse_args()
     
@@ -47,7 +58,12 @@ def main():
         notion_client = NotionAPIClient(token=args.notion_token)
         
         logger.info(f"Creating documentation in Notion page: {args.notion_page_id}")
-        notion_client.create_endpoint_documentation(args.notion_page_id, endpoints)
+        notion_client.create_endpoint_documentation(
+            args.notion_page_id, 
+            endpoints,
+            include_errors=args.include_errors,
+            batch_size=args.batch_size
+        )
         
         logger.info("Documentation created successfully!")
         
